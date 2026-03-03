@@ -1,64 +1,42 @@
-const API_URL = 'http://localhost:3001/api';
+const API_URL = '/api';
 
-export const dbQuery = async (text: string, params?: unknown[]) => {
-  const response = await fetch(`${API_URL}/query`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ text, params }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Database query failed');
-  }
-
-  return response.json();
+const authHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-export const db = {
-  from: (table: string) => ({
-    select: (columns = '*') => ({
-      eq: async (column: string, value: unknown) => {
-        const result = await dbQuery(
-          `SELECT ${columns} FROM ${table} WHERE ${column} = $1`,
-          [value]
-        );
-        return { data: result.rows, error: null };
-      },
-    }),
-    insert: async (data: Record<string, unknown>) => {
-      const keys = Object.keys(data);
-      const values = Object.values(data);
-      const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
-      const result = await dbQuery(
-        `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`,
-        values
-      );
-      return { data: result.rows, error: null };
+const request = async (path: string, init: RequestInit = {}) => {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+      ...(init.headers || {}),
     },
-    update: (data: Record<string, unknown>) => ({
-      eq: async (column: string, value: unknown) => {
-        const keys = Object.keys(data);
-        const values = Object.values(data);
-        const setClause = keys.map((key, i) => `${key} = $${i + 1}`).join(', ');
+  });
 
-        const result = await dbQuery(
-          `UPDATE ${table} SET ${setClause} WHERE ${column} = $${values.length + 1} RETURNING *`,
-          [...values, value]
-        );
-        return { data: result.rows, error: null };
-      },
-    }),
-    delete: () => ({
-      eq: async (column: string, value: unknown) => {
-        const result = await dbQuery(
-          `DELETE FROM ${table} WHERE ${column} = $1 RETURNING *`,
-          [value]
-        );
-        return { data: result.rows, error: null };
-      },
-    }),
-  }),
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || 'Request failed');
+  return body;
+};
+
+export const api = {
+  login: (username: string, password: string) =>
+    request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  me: () => request('/auth/me'),
+  years: {
+    list: () => request('/academic/years'),
+    create: (payload: unknown) => request('/academic/years', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  programs: {
+    list: (academicYearId?: string) => request(`/academic/programs${academicYearId ? `?academic_year_id=${academicYearId}` : ''}`),
+    create: (payload: unknown) => request('/academic/programs', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  terms: {
+    list: (programId?: string) => request(`/academic/terms${programId ? `?program_id=${programId}` : ''}`),
+    create: (payload: unknown) => request('/academic/terms', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  scheduling: {
+    generate: (termId: string) => request(`/scheduling/generate/${termId}`, { method: 'POST' }),
+  },
 };

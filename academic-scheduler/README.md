@@ -94,3 +94,18 @@ docker compose up -d --build
 ```
 
 If `docker info` still fails, restart Docker Desktop and reboot Windows.
+
+
+## Included application features (implemented)
+- JWT login using seeded admin user.
+- Academic year creation/listing.
+- Program creation/listing (by academic year).
+- Term creation/listing (by program).
+- Calendar generation endpoint with blocked days / no-class period checks and credit-based class limits (0.5=>10, otherwise 20).
+
+## Run after pulling latest code
+```bash
+cd sample_app/academic-scheduler
+docker compose up -d --build
+./scripts/migrate-and-seed.sh
+```

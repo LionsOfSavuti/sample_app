@@ -1,0 +1,93 @@
+import express from 'express';
+import pool from '../db/pool.js';
+
+const router = express.Router();
+
+const jsToDbDay = (jsDay) => (jsDay === 0 ? 7 : jsDay);
+
+router.post('/generate/:termId', async (req, res) => {
+  const { termId } = req.params;
+
+  const termQ = await pool.query('SELECT * FROM terms WHERE id = $1', [termId]);
+  const term = termQ.rows[0];
+  if (!term) return res.status(404).json({ error: 'Term not found' });
+
+  const settingsQ = await pool.query('SELECT * FROM term_settings WHERE term_id = $1 LIMIT 1', [termId]);
+  const settings = settingsQ.rows[0];
+  const blockedDays = new Set((settings?.blocked_days || []).map((d) => d.toLowerCase()));
+
+  const noClassQ = await pool.query('SELECT start_date, end_date FROM no_class_periods WHERE term_id = $1', [termId]);
+  const noClass = noClassQ.rows;
+
+  const schedulesQ = await pool.query(
+    `SELECT s.*, ts.day_of_week, ts.start_time, ts.end_time, cs.section_name, c.id AS course_id, c.credits, c.code
+     FROM schedules s
+     JOIN time_slots ts ON ts.id = s.time_slot_id
+     JOIN course_sections cs ON cs.id = s.course_section_id
+     JOIN courses c ON c.id = cs.course_id
+     WHERE s.term_id = $1`,
+    [termId]
+  );
+
+  const maxForCredits = (credits) => (Number(credits) === 0.5 ? 10 : 20);
+  const counts = new Map();
+  const inserts = [];
+
+  const start = new Date(term.start_date);
+  const end = new Date(term.end_date);
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    if (blockedDays.has(dayName)) continue;
+
+    const inNoClass = noClass.some((p) => d >= new Date(p.start_date) && d <= new Date(p.end_date));
+    if (inNoClass) continue;
+
+    const dayOfWeek = jsToDbDay(d.getDay());
+    for (const sch of schedulesQ.rows) {
+      if (sch.day_of_week !== dayOfWeek) continue;
+
+      const key = `${sch.course_id}-${sch.section_name}`;
+      const next = (counts.get(key) || 0) + 1;
+      if (next > maxForCredits(sch.credits)) continue;
+
+      counts.set(key, next);
+      inserts.push([
+        term.id,
+        sch.id,
+        sch.course_id,
+        sch.section_name,
+        d.toISOString().slice(0, 10),
+        next,
+        `${sch.start_time}-${sch.end_time}`,
+        d.toLocaleDateString('en-US', { weekday: 'long' }),
+        'scheduled',
+        sch.program_id,
+        sch.academic_year,
+      ]);
+    }
+  }
+
+  for (let i = 0; i < inserts.length; i += 100) {
+    const batch = inserts.slice(i, i + 100);
+    const values = [];
+    const placeholders = batch
+      .map((r, idx) => {
+        const base = idx * 11;
+        values.push(...r);
+        return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11})`;
+      })
+      .join(',');
+
+    await pool.query(
+      `INSERT INTO scheduled_classes
+      (term_id,schedule_id,course_id,section,class_date,class_number,time_slot,day_of_week,status,program_id,academic_year)
+      VALUES ${placeholders}`,
+      values
+    );
+  }
+
+  res.json({ generated: inserts.length });
+});
+
+export default router;
