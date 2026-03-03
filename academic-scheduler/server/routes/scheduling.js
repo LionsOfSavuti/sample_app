@@ -90,13 +90,13 @@ router.post('/generate/:termId', async (req, res) => {
   res.json({ generated: inserts.length });
 });
 
-
-
 router.post('/assign', async (req, res) => {
   const { term_id, course_section_id, time_slot_id, classroom_id = null, program_id, academic_year } = req.body;
   if (!term_id || !course_section_id || !time_slot_id || !program_id || !academic_year) {
     return res.status(400).json({ error: 'term_id, course_section_id, time_slot_id, program_id, academic_year required' });
   }
+
+  await pool.query('DELETE FROM schedules WHERE term_id = $1 AND course_section_id = $2', [term_id, course_section_id]);
 
   const q = await pool.query(
     `INSERT INTO schedules(course_section_id,time_slot_id,classroom_id,term_id,program_id,academic_year)
@@ -105,6 +105,13 @@ router.post('/assign', async (req, res) => {
     [course_section_id, time_slot_id, classroom_id, term_id, program_id, academic_year]
   );
   res.status(201).json(q.rows[0]);
+});
+
+router.delete('/clear/:termId', async (req, res) => {
+  const { termId } = req.params;
+  await pool.query('DELETE FROM schedules WHERE term_id = $1', [termId]);
+  await pool.query('DELETE FROM scheduled_classes WHERE term_id = $1', [termId]);
+  res.json({ success: true });
 });
 
 router.get('/weekly', async (req, res) => {

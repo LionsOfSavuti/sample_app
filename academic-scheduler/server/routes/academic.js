@@ -112,10 +112,13 @@ router.post('/time-slots', async (req, res) => {
 router.get('/course-sections', async (req, res) => {
   const { program_id, academic_year } = req.query;
   const q = await pool.query(
-    `SELECT cs.id, cs.section_name, c.code, c.name, c.term
+    `SELECT cs.id, cs.section_name, c.code, c.name, c.term,
+             COALESCE(COUNT(DISTINCT ce.student_id),0)::int AS students
      FROM course_sections cs
      JOIN courses c ON c.id = cs.course_id
+     LEFT JOIN course_enrollments ce ON ce.course_section_id = cs.id
      WHERE cs.program_id = $1 AND cs.academic_year = $2
+     GROUP BY cs.id, c.code, c.name, c.term
      ORDER BY c.code, cs.section_name`,
     [program_id, academic_year]
   );
@@ -129,6 +132,19 @@ router.get('/classrooms', async (req, res) => {
     [program_id, academic_year]
   );
   res.json(q.rows);
+});
+
+router.post('/classrooms', async (req, res) => {
+  const { name, program_id, academic_year, capacity = 60, building = null } = req.body;
+  const q = await pool.query(
+    `INSERT INTO classrooms(name,capacity,building,program_id,academic_year)
+     VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (name)
+     DO UPDATE SET capacity = EXCLUDED.capacity, building = EXCLUDED.building
+     RETURNING *`,
+    [name, capacity, building, program_id, academic_year]
+  );
+  res.status(201).json(q.rows[0]);
 });
 
 router.post('/import/courses', async (req, res) => {
