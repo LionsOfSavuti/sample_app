@@ -43,6 +43,14 @@ Default admin:
 - username: `admin`
 - password: `admin123`
 
+If login fails for `admin/admin123`, re-apply the seed to reset the admin password:
+
+```bash
+./scripts/migrate-and-seed.sh
+```
+
+This seed now force-updates the `admin` user password on every run.
+
 ## 5) Verify database objects
 ```bash
 docker exec -it academic_scheduler_db psql -U scheduler_admin -d academic_scheduler -c "\dt"
