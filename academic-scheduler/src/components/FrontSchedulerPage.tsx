@@ -38,6 +38,8 @@ export default function FrontSchedulerPage() {
   const [uploadMessage, setUploadMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const academicYearText = years.find((y) => y.id === yearId)?.name || '';
+  const currentProgram = programs.find((p) => p.id === programId);
+  const currentTerm = terms.find((t) => t.id === termId);
 
   const loadMeta = async () => {
     const ys = await api.years.list();
@@ -179,95 +181,93 @@ export default function FrontSchedulerPage() {
 
   return (
     <>
-      <header className="app-header">
+      <header className="app-shell-header">
         <div className="brand-container">
-          <div className="brand-title">📅 IIM Raipur Timetable Scheduler</div>
-          <div className="brand-subtitle">Developed by Dr Jithesh A</div>
+          <div className="brand-title">📅 Academic Timetable Management</div>
+          <div className="brand-subtitle">Developed by Prof. Jithesh A, IIM Raipur</div>
         </div>
 
-        <div className="header-controls">
-          <select id="yearSel" className="form-select" value={yearId} onChange={(e) => setYearId(e.target.value)}>
-            {years.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}
-          </select>
-          <select id="progSel" className="form-select" value={programId} onChange={(e) => setProgramId(e.target.value)}>
+        <div className="top-selectors">
+          <label>Program:</label>
+          <select id="progSel" className="form-select large" value={programId} onChange={(e) => setProgramId(e.target.value)}>
             {programs.map((p) => <option key={p.id} value={p.id}>{p.code || p.name}</option>)}
           </select>
-          <select id="termSel" className="form-select" value={termId} onChange={(e) => setTermId(e.target.value)}>
+          <label>Year:</label>
+          <select id="yearSel" className="form-select large" value={yearId} onChange={(e) => setYearId(e.target.value)}>
+            {years.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}
+          </select>
+          <label>Term:</label>
+          <select id="termSel" className="form-select large" value={termId} onChange={(e) => setTermId(e.target.value)}>
             {terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </div>
-
-        <div className="header-controls">
-          <input className="form-input" value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Room" size={8} />
-          <button className="btn btn-outline" onClick={addRoom}>+ Room</button>
-          <input className="form-input" value={slotLabel} onChange={(e) => setSlotLabel(e.target.value)} placeholder="Time Slot" size={10} />
-          <select className="form-select" value={slotDay} onChange={(e) => setSlotDay(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i + 1}>{d.slice(0,3)}</option>)}</select>
-          <input className="form-input" type="time" value={slotStart} onChange={(e) => setSlotStart(e.target.value)} />
-          <input className="form-input" type="time" value={slotEnd} onChange={(e) => setSlotEnd(e.target.value)} />
-          <button className="btn btn-outline" onClick={addSlot}>+ Time</button>
-        </div>
-
-        <div className="header-controls">
-          <label className="btn btn-primary">Students<input type="file" hidden onChange={(e) => upload('students', e.target.files?.[0])} /></label>
-          <label className="btn btn-primary">Courses<input type="file" hidden onChange={(e) => upload('courses', e.target.files?.[0])} /></label>
-          <button className="btn btn-danger" onClick={clearGrid}>Reset</button>
-        </div>
       </header>
 
+      <section className="action-toolbar">
+        <button className="btn btn-danger" onClick={clearGrid}>↻ Clear Schedule</button>
+        <button className="btn btn-muted">🗓 Manage Terms</button>
+        <button className="btn btn-success">⬇ Export Timetable</button>
+        <button className="btn btn-green">📅 Calendar</button>
+        <button className="btn btn-indigo">👥 Faculty</button>
+        <button className="btn btn-indigo">🕘 Rescheduling History</button>
+        <button className="btn btn-muted">⚙ Settings</button>
+        <label className="btn btn-teal">📚 Import Courses<input type="file" hidden onChange={(e) => upload('courses', e.target.files?.[0])} /></label>
+        <label className="btn btn-orange">📤 Import Students<input type="file" hidden onChange={(e) => upload('students', e.target.files?.[0])} /></label>
+      </section>
+
       {uploadMessage && (
-        <div
-          style={{
-            margin: '8px 24px 0',
-            padding: '10px 12px',
-            borderRadius: 6,
-            fontSize: 13,
-            fontWeight: 600,
-            background: uploadMessage.type === 'success' ? '#dcfce7' : '#fee2e2',
-            color: uploadMessage.type === 'success' ? '#166534' : '#991b1b',
-          }}
-        >
+        <div className={`upload-banner ${uploadMessage.type}`}>
           {uploadMessage.text}
         </div>
       )}
 
-      <div className="main-wrapper">
+      <div className="main-wrapper upgraded">
         <aside className="sidebar">
-          <div className="sidebar-header">Courses (Min 15 Students)</div>
+          <div className="sidebar-header">🎓 Course Sections</div>
+          <div className="sidebar-subhead">{currentTerm?.name || 'Select Term'}</div>
+          <div className="sidebar-meta">Program: {currentProgram?.code || '--'} · Year: {academicYearText || '--'}</div>
           <div style={{ padding: 10, borderBottom: '1px solid var(--gray-200)' }}>
-            <input id="courseSearch" className="form-input" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input id="courseSearch" className="form-input" placeholder="Search courses or faculty..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <div id="courseList" className="course-list">
             {filteredCards.map((c) => (
               <div key={c.id} className="course-card" draggable onDragStart={() => setDragCardId(c.id)}>
-                <div className="course-code-line">{c.code.slice(-3).toUpperCase()}<br />{c.section_name}</div>
+                <div className="course-code-line">{c.code}-{c.section_name}</div>
                 <span className="prof-name">{c.name}</span>
-                <div className="stats">Sessions scheduled: --<br />No of students enrolled: {c.students}</div>
+                <div className="stats">👥 {c.students} students enrolled</div>
               </div>
             ))}
           </div>
         </aside>
 
         <main className="content">
-          <div id="timetable" style={{ gridTemplateColumns: `40px repeat(${timeHeaders.length}, 1fr)` }}>
-            <div className="cell" style={{ background: 'var(--gray-900)' }} />
-            {timeHeaders.map((h) => <div key={h} className="cell header-cell">{h}</div>)}
+          <div className="weekly-panel-title">📅 Weekly Schedule</div>
+          <div id="timetable" className="upgraded-grid" style={{ gridTemplateColumns: `140px repeat(${timeHeaders.length}, 1fr)` }}>
+            <div className="cell header-corner">Day</div>
+            {timeHeaders.map((h) => <div key={h} className="cell header-cell upgraded">🕒 {h}</div>)}
 
             {DAYS.map((day) => (
-              <div key={day} style={{display:'contents'}}>
-                <div key={`${day}-d`} className="cell day-cell">{day}</div>
+              <div key={day} style={{ display: 'contents' }}>
+                <div key={`${day}-d`} className="cell day-cell upgraded">📅 {day}</div>
                 {timeHeaders.map((h) => {
                   const items = cellItems(day, h);
                   return (
-                    <div key={`${day}-${h}`} className="cell slot-container" onDragOver={(e) => e.preventDefault()} onDrop={() => onDropCell(day, h)}>
+                    <div key={`${day}-${h}`} className="cell slot-container upgraded" onDragOver={(e) => e.preventDefault()} onDrop={() => onDropCell(day, h)}>
                       {rooms.map((r) => (
-                        <div key={r.id} className="room-slot">
-                          <span className="room-label">{r.name}</span>
-                          <div className="clash-badge" />
-                          {items.filter((i) => !i.classroom_name || i.classroom_name === r.name).map((m, idx) => (
-                            <div key={idx} className="placed-course" title={`${m.course_code}-${m.section_name}`}>
-                              {m.course_code.slice(-3).toUpperCase()} - {m.section_name}
-                            </div>
-                          ))}
+                        <div key={r.id} className="room-slot upgraded">
+                          <span className="room-label">🏫 {r.name}</span>
+                          {items.filter((i) => !i.classroom_name || i.classroom_name === r.name).length === 0 ? (
+                            <div className="empty-slot">Empty</div>
+                          ) : (
+                            items
+                              .filter((i) => !i.classroom_name || i.classroom_name === r.name)
+                              .map((m, idx) => (
+                                <div key={idx} className="placed-course upgraded" title={`${m.course_code}-${m.section_name}`}>
+                                  <div>{m.course_code}-{m.section_name}</div>
+                                  <small>{m.classroom_name || r.name}</small>
+                                </div>
+                              ))
+                          )}
                         </div>
                       ))}
                     </div>
@@ -275,6 +275,16 @@ export default function FrontSchedulerPage() {
                 })}
               </div>
             ))}
+          </div>
+
+          <div className="quick-add-row">
+            <input className="form-input" value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Room" size={8} />
+            <button className="btn btn-outline" onClick={addRoom}>+ Room</button>
+            <input className="form-input" value={slotLabel} onChange={(e) => setSlotLabel(e.target.value)} placeholder="Time Slot" size={10} />
+            <select className="form-select" value={slotDay} onChange={(e) => setSlotDay(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i + 1}>{d.slice(0, 3)}</option>)}</select>
+            <input className="form-input" type="time" value={slotStart} onChange={(e) => setSlotStart(e.target.value)} />
+            <input className="form-input" type="time" value={slotEnd} onChange={(e) => setSlotEnd(e.target.value)} />
+            <button className="btn btn-outline" onClick={addSlot}>+ Time</button>
           </div>
         </main>
       </div>
