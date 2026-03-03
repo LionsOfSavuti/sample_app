@@ -37,6 +37,19 @@ cd academic-scheduler
 
 Add your SQL migrations to `supabase/migrations/` first.
 
+If you get `permission denied for schema public`, grant schema rights once as postgres:
+
+```bash
+psql -U postgres -d academic_scheduler -c "GRANT USAGE, CREATE ON SCHEMA public TO scheduler_admin;"
+psql -U postgres -d academic_scheduler -c "ALTER SCHEMA public OWNER TO scheduler_admin;"
+```
+
+Then re-run:
+
+```bash
+./create-tables.sh
+```
+
 ## Notes
 
 - This is a scaffold and includes minimal `src/App.tsx` and `src/main.tsx`.

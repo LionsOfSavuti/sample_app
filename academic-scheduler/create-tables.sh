@@ -12,7 +12,7 @@ fi
 
 for file in $(ls -1 "$MIGRATIONS_DIR"/*.sql | sort); do
   echo "Running migration: $file"
-  psql -U "$DB_USER" -d "$DB_NAME" -f "$file"
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -f "$file"
 done
 
 echo "All migrations completed!"
