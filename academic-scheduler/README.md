@@ -15,7 +15,16 @@ git clone -b codex/create-local-setup-guide-for-system https://github.com/LionsO
 cd sample_app/academic-scheduler
 ```
 
-## 2) Start full stack
+## 2) Start Docker Desktop (Windows/macOS)
+Make sure Docker Desktop is open and the engine is running before any `docker` command.
+
+Quick check:
+```bash
+docker version
+docker info
+```
+
+## 3) Start full stack
 ```bash
 docker compose up -d --build
 ```
@@ -25,7 +34,7 @@ Services:
 - API: `http://localhost:3001`
 - PostgreSQL: `localhost:5432`
 
-## 3) Run migrations + seed default admin
+## 4) Run migrations + seed default admin
 ```bash
 ./scripts/migrate-and-seed.sh
 ```
@@ -34,17 +43,17 @@ Default admin:
 - username: `admin`
 - password: `admin123`
 
-## 4) Verify database objects
+## 5) Verify database objects
 ```bash
 docker exec -it academic_scheduler_db psql -U scheduler_admin -d academic_scheduler -c "\dt"
 ```
 
-## 5) Stop stack
+## 6) Stop stack
 ```bash
 docker compose down
 ```
 
-## 6) Reset everything (including DB data)
+## 7) Reset everything (including DB data)
 ```bash
 docker compose down -v
 ```
@@ -64,3 +73,24 @@ Get-ChildItem .\supabase\seeds\*.sql | Sort-Object Name | ForEach-Object {
 ## Existing non-Docker workflow
 If you still want local Node/Postgres tools directly, see:
 - `doc/ACADEMIC_SCHEDULING_LOCAL_SETUP.md`
+
+
+## Troubleshooting (Windows)
+If you see errors like:
+- `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`
+- `failed to connect to the docker API`
+
+Run:
+```powershell
+# 1) Start Docker Desktop manually from Start menu
+# 2) Confirm daemon is up
+docker version
+docker info
+
+# 3) (optional) switch to Linux containers mode in Docker Desktop UI
+# 4) retry
+docker compose up -d --build
+./scripts/migrate-and-seed.sh
+```
+
+If `docker info` still fails, restart Docker Desktop and reboot Windows.
