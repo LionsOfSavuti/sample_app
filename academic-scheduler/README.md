@@ -1,56 +1,66 @@
-# Academic Scheduler Bootstrap
+# Academic Scheduler Bootstrap (Docker E2E)
 
-This folder contains ready-to-run starter files so you can pull from git and execute setup quickly.
+This setup recreates the project locally with:
+- React + Vite frontend
+- Node/Express API
+- PostgreSQL database
+- Apache serving frontend and proxying `/api`
 
-## Quick start
+## Prerequisites
+- Docker Desktop (Windows/Mac) or Docker Engine + Compose (Linux)
 
+## 1) Clone and open
 ```bash
-cd academic-scheduler
-cp .env.example .env
-npm install
-npm run api
+git clone -b codex/create-local-setup-guide-for-system https://github.com/LionsOfSavuti/sample_app.git
+cd sample_app/academic-scheduler
 ```
 
-In another terminal:
-
+## 2) Start full stack
 ```bash
-cd academic-scheduler
-npm run dev
+docker compose up -d --build
 ```
 
-## Database prep
+Services:
+- Web (Apache): `http://localhost:8080`
+- API: `http://localhost:3001`
+- PostgreSQL: `localhost:5432`
 
+## 3) Run migrations + seed default admin
 ```bash
-psql -U postgres
-CREATE DATABASE academic_scheduler;
-CREATE USER scheduler_admin WITH PASSWORD 'your_secure_password';
-GRANT ALL PRIVILEGES ON DATABASE academic_scheduler TO scheduler_admin;
-\q
+./scripts/migrate-and-seed.sh
 ```
 
-Then run migrations:
+Default admin:
+- username: `admin`
+- password: `admin123`
 
+## 4) Verify database objects
 ```bash
-cd academic-scheduler
-./create-tables.sh
+docker exec -it academic_scheduler_db psql -U scheduler_admin -d academic_scheduler -c "\dt"
 ```
 
-Add your SQL migrations to `supabase/migrations/` first.
-
-If you get `permission denied for schema public`, grant schema rights once as postgres:
-
+## 5) Stop stack
 ```bash
-psql -U postgres -d academic_scheduler -c "GRANT USAGE, CREATE ON SCHEMA public TO scheduler_admin;"
-psql -U postgres -d academic_scheduler -c "ALTER SCHEMA public OWNER TO scheduler_admin;"
+docker compose down
 ```
 
-Then re-run:
-
+## 6) Reset everything (including DB data)
 ```bash
-./create-tables.sh
+docker compose down -v
 ```
 
-## Notes
+## Windows notes
+If using PowerShell and script execution is blocked, run migrations/seeds manually:
 
-- This is a scaffold and includes minimal `src/App.tsx` and `src/main.tsx`.
-- Copy your full feature source files into `src/` as needed.
+```powershell
+Get-ChildItem .\supabase\migrations\*.sql | Sort-Object Name | ForEach-Object {
+  Get-Content $_.FullName | docker exec -i academic_scheduler_db psql -v ON_ERROR_STOP=1 -U scheduler_admin -d academic_scheduler
+}
+Get-ChildItem .\supabase\seeds\*.sql | Sort-Object Name | ForEach-Object {
+  Get-Content $_.FullName | docker exec -i academic_scheduler_db psql -v ON_ERROR_STOP=1 -U scheduler_admin -d academic_scheduler
+}
+```
+
+## Existing non-Docker workflow
+If you still want local Node/Postgres tools directly, see:
+- `doc/ACADEMIC_SCHEDULING_LOCAL_SETUP.md`

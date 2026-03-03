@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16
+    container_name: academic_scheduler_db
+    environment:
+      POSTGRES_DB: academic_scheduler
+      POSTGRES_USER: scheduler_admin
+      POSTGRES_PASSWORD: scheduler_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler_admin -d academic_scheduler"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: academic_scheduler_api
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: academic_scheduler
+      DB_USER: scheduler_admin
+      DB_PASSWORD: scheduler_password
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: academic_scheduler_web
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pg_data:
