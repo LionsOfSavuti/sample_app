@@ -35,6 +35,7 @@ export default function FrontSchedulerPage() {
   const [slotDay, setSlotDay] = useState(1);
   const [search, setSearch] = useState('');
   const [dragCardId, setDragCardId] = useState('');
+  const [uploadMessage, setUploadMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const academicYearText = years.find((y) => y.id === yearId)?.name || '';
 
@@ -128,12 +129,22 @@ export default function FrontSchedulerPage() {
     }
 
     const text = await file.text();
-    const out = type === 'students'
-      ? await api.imports.students({ csv: text, program_id: programId, academic_year: academicYearText })
-      : await api.imports.courses({ csv: text, program_id: programId, academic_year: academicYearText });
+    try {
+      const out = type === 'students'
+        ? await api.imports.students({ csv: text, program_id: programId, academic_year: academicYearText })
+        : await api.imports.courses({ csv: text, program_id: programId, academic_year: academicYearText });
 
-    alert(`${type} import complete: inserted ${out.inserted}/${out.total}, skipped ${out.skipped ?? 0}`);
-    await refreshData();
+      const base = out.message || `${type} upload completed`;
+      const details = `inserted ${out.inserted ?? 0}/${out.total ?? 0}, skipped ${out.skipped ?? 0}`;
+      const errors = Array.isArray(out.row_errors) && out.row_errors.length
+        ? ` | Row issues: ${out.row_errors.slice(0, 3).map((e: any) => `#${e.row} ${e.reason}`).join('; ')}`
+        : '';
+
+      setUploadMessage({ type: 'success', text: `${base} (${details})${errors}` });
+      await refreshData();
+    } catch (error: any) {
+      setUploadMessage({ type: 'error', text: error?.message || 'Upload failed' });
+    }
   };
 
   const filteredCards = cards.filter((c) => c.students >= 15 && (`${c.code} ${c.name}`.toLowerCase().includes(search.toLowerCase())));
@@ -202,6 +213,22 @@ export default function FrontSchedulerPage() {
           <button className="btn btn-danger" onClick={clearGrid}>Reset</button>
         </div>
       </header>
+
+      {uploadMessage && (
+        <div
+          style={{
+            margin: '8px 24px 0',
+            padding: '10px 12px',
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 600,
+            background: uploadMessage.type === 'success' ? '#dcfce7' : '#fee2e2',
+            color: uploadMessage.type === 'success' ? '#166534' : '#991b1b',
+          }}
+        >
+          {uploadMessage.text}
+        </div>
+      )}
 
       <div className="main-wrapper">
         <aside className="sidebar">

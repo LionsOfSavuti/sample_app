@@ -3,23 +3,90 @@ import pool from '../db/pool.js';
 
 const router = express.Router();
 
+const normalizeHeader = (value) => value
+  .replace(/^\uFEFF/, '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '');
+
+const parseCsvLine = (line) => {
+  const out = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      out.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  out.push(current.trim());
+  return out;
+};
+
 const parseCsv = (text) => {
-  const lines = text
+  const rawLines = (text || '')
     .replace(/^\uFEFF/, '')
     .replace(/\r/g, '')
     .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (lines.length < 2) return [];
+    .filter((line) => line.trim().length > 0);
 
-  const headers = lines[0]
-    .split(',')
-    .map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  if (rawLines.length < 2) return [];
 
-  return lines.slice(1).map((line) => {
-    const cols = line.split(',').map((c) => c.trim());
-    return Object.fromEntries(headers.map((h, i) => [h, cols[i] ?? '']));
+  const headers = parseCsvLine(rawLines[0]).map(normalizeHeader);
+
+  return rawLines.slice(1).map((line, index) => {
+    const cols = parseCsvLine(line);
+    const row = Object.fromEntries(headers.map((header, i) => [header, cols[i] ?? '']));
+    return { rowNumber: index + 2, row, headers };
   });
+};
+
+const parseTermNumber = (value) => {
+  const source = String(value || '').trim().toLowerCase();
+  if (!source) return 1;
+
+  if (['1', 'term_1', 'term_i', 'term_i_'].includes(source)) return 1;
+  if (['2', 'term_2', 'term_ii'].includes(source)) return 2;
+  if (['3', 'term_3', 'term_iii'].includes(source)) return 3;
+
+  if (source.includes('term vi') || source.includes('term_vi') || source === '6') return 3;
+  if (source.includes('term v') || source.includes('term_v') || source === '5') return 2;
+  if (source.includes('term iv') || source.includes('term_iv') || source === '4') return 1;
+
+  const parsed = Number(source.replace(/[^0-9]/g, ''));
+  if (parsed === 4) return 1;
+  if (parsed === 5) return 2;
+  if (parsed === 6) return 3;
+  if ([1, 2, 3].includes(parsed)) return parsed;
+
+  return 1;
+};
+
+const enrollmentToRollNumber = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/\(([^)]+)\)\s*$/);
+  if (match) return match[1].trim();
+  return trimmed;
 };
 
 router.get('/years', async (_req, res) => {
@@ -232,67 +299,203 @@ router.post('/import/courses', async (req, res) => {
   const { csv, program_id, academic_year } = req.body;
   if (!program_id || !academic_year) return res.status(400).json({ error: 'program_id and academic_year are required' });
 
-  const rows = parseCsv(csv || '');
+  const parsedRows = parseCsv(csv || '');
   let inserted = 0;
   let skipped = 0;
+  let enrollmentsInserted = 0;
+  let facultyCreated = 0;
+  let studentsCreated = 0;
+  const rowErrors = [];
 
-  for (const row of rows) {
-    const code = row.code;
-    const name = row.name;
+  for (const { rowNumber, row, headers } of parsedRows) {
+    const code = row.course_code || row.code;
+    const name = row.course_name || row.name;
     const credits = Number(row.credits || 1);
-    const term = Number(row.term || 1);
+    const term = parseTermNumber(row.term);
     const section = row.section || 'A';
+    const professorName = (row.professor || '').trim();
+    const maxSeats = Number(row.max_seats || 60) || 60;
 
     if (!code || !name) {
       skipped += 1;
+      rowErrors.push({ row: rowNumber, reason: 'Missing Course Code or Course Name' });
       continue;
     }
 
-    const c = await pool.query(
-      `INSERT INTO courses(name,code,credits,term,program_id,academic_year)
-       VALUES ($1,$2,$3,$4,$5,$6)
-       ON CONFLICT (code,term,program_id,academic_year)
-       DO UPDATE SET name = EXCLUDED.name, credits = EXCLUDED.credits
-       RETURNING id`,
-      [name, code, credits, term, program_id, academic_year]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    await pool.query(
-      `INSERT INTO course_sections(course_id,section_name,program_id,academic_year)
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT DO NOTHING`,
-      [c.rows[0].id, section, program_id, academic_year]
-    );
-    inserted += 1;
+      const courseUpsert = await client.query(
+        `INSERT INTO courses(name,code,credits,term,program_id,academic_year)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (code,term,program_id,academic_year)
+         DO UPDATE SET name = EXCLUDED.name, credits = EXCLUDED.credits
+         RETURNING id`,
+        [name, code, credits, term, program_id, academic_year]
+      );
+      const courseId = courseUpsert.rows[0].id;
+
+      let facultyId = null;
+      if (professorName) {
+        const existingFaculty = await client.query(
+          'SELECT id FROM faculty WHERE program_id = $1 AND academic_year = $2 AND LOWER(name) = LOWER($3) LIMIT 1',
+          [program_id, academic_year, professorName]
+        );
+
+        if (existingFaculty.rows[0]) {
+          facultyId = existingFaculty.rows[0].id;
+        } else {
+          const facultyInsert = await client.query(
+            `INSERT INTO faculty(name,email,department,program_id,academic_year)
+             VALUES ($1,$2,$3,$4,$5)
+             RETURNING id`,
+            [professorName, `${professorName.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@example.com`, null, program_id, academic_year]
+          );
+          facultyId = facultyInsert.rows[0].id;
+          facultyCreated += 1;
+        }
+      }
+
+      let sectionId;
+      const sectionExisting = await client.query(
+        `SELECT id FROM course_sections
+         WHERE course_id = $1 AND section_name = $2 AND program_id = $3 AND academic_year = $4
+         LIMIT 1`,
+        [courseId, section, program_id, academic_year]
+      );
+
+      if (sectionExisting.rows[0]) {
+        sectionId = sectionExisting.rows[0].id;
+        await client.query(
+          'UPDATE course_sections SET max_students = $1, faculty_id = COALESCE($2, faculty_id) WHERE id = $3',
+          [maxSeats, facultyId, sectionId]
+        );
+      } else {
+        const sectionInsert = await client.query(
+          `INSERT INTO course_sections(course_id,section_name,faculty_id,max_students,program_id,academic_year)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           RETURNING id`,
+          [courseId, section, facultyId, maxSeats, program_id, academic_year]
+        );
+        sectionId = sectionInsert.rows[0].id;
+      }
+
+      const enrollmentHeaders = headers.filter((h) => /^\d+$/.test(h) || /^student_\d+$/.test(h));
+
+      for (const enrollmentHeader of enrollmentHeaders) {
+        const value = row[enrollmentHeader];
+        if (!value) continue;
+
+        const rollNumber = enrollmentToRollNumber(value);
+        if (!rollNumber) continue;
+
+        let studentId;
+        const studentLookup = await client.query(
+          'SELECT id FROM students WHERE student_id = $1 AND program_id = $2 AND academic_year = $3 LIMIT 1',
+          [rollNumber, program_id, academic_year]
+        );
+
+        if (studentLookup.rows[0]) {
+          studentId = studentLookup.rows[0].id;
+        } else {
+          const studentInsert = await client.query(
+            `INSERT INTO students(student_id,name,email,section,program_id,academic_year)
+             VALUES ($1,$2,$3,$4,$5,$6)
+             ON CONFLICT (student_id)
+             DO UPDATE SET name = COALESCE(students.name, EXCLUDED.name)
+             RETURNING id`,
+            [rollNumber, value.includes('(') ? value.replace(/\s*\([^)]*\)\s*$/, '') : rollNumber, null, section, program_id, academic_year]
+          );
+          studentId = studentInsert.rows[0].id;
+          studentsCreated += 1;
+        }
+
+        await client.query(
+          `INSERT INTO course_enrollments(student_id,course_section_id,program_id,academic_year)
+           SELECT $1,$2,$3,$4
+           WHERE NOT EXISTS (
+             SELECT 1 FROM course_enrollments
+             WHERE student_id = $1 AND course_section_id = $2 AND program_id = $3 AND academic_year = $4
+           )`,
+          [studentId, sectionId, program_id, academic_year]
+        );
+        enrollmentsInserted += 1;
+      }
+
+      await client.query('COMMIT');
+      inserted += 1;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      skipped += 1;
+      rowErrors.push({ row: rowNumber, reason: error.message });
+    } finally {
+      client.release();
+    }
   }
 
-  res.json({ inserted, skipped, total: rows.length, expected_columns: ['code','name','credits','term','section'] });
+  res.json({
+    message: `Course upload completed. ${inserted} row(s) processed successfully.`,
+    inserted,
+    skipped,
+    total: parsedRows.length,
+    enrollments_inserted: enrollmentsInserted,
+    faculty_created: facultyCreated,
+    students_created: studentsCreated,
+    expected_columns: [
+      'Term',
+      'Programme',
+      'Area',
+      'Course Name',
+      'Course Code',
+      'Section',
+      'Credits',
+      'Professor',
+      'Max Seats',
+      'Confirmed Seats',
+      '1...75 (student enrollments)',
+    ],
+    row_errors: rowErrors.slice(0, 20),
+  });
 });
 
 router.post('/import/students', async (req, res) => {
   const { csv, program_id, academic_year } = req.body;
   if (!program_id || !academic_year) return res.status(400).json({ error: 'program_id and academic_year are required' });
 
-  const rows = parseCsv(csv || '');
+  const parsedRows = parseCsv(csv || '');
   let inserted = 0;
   let skipped = 0;
+  const rowErrors = [];
 
-  for (const row of rows) {
-    if (!row.student_id || !row.name) {
+  for (const { rowNumber, row } of parsedRows) {
+    const studentId = row.student_id || row.roll_number || row.roll_no || row.rollnumber;
+    const studentName = row.name || row.student_name;
+
+    if (!studentId || !studentName) {
       skipped += 1;
+      rowErrors.push({ row: rowNumber, reason: 'Missing Roll Number/Student ID or Student Name' });
       continue;
     }
+
     await pool.query(
       `INSERT INTO students(student_id,name,email,section,program_id,academic_year)
        VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT (student_id)
        DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, section = EXCLUDED.section`,
-      [row.student_id, row.name, row.email || null, row.section || null, program_id, academic_year]
+      [studentId, studentName, row.email || null, row.section || null, program_id, academic_year]
     );
     inserted += 1;
   }
 
-  res.json({ inserted, skipped, total: rows.length, expected_columns: ['student_id','name','email','section'] });
+  res.json({
+    message: `Student upload completed. ${inserted} row(s) inserted/updated.`,
+    inserted,
+    skipped,
+    total: parsedRows.length,
+    expected_columns: ['Roll Number|student_id', 'Student Name|name', 'Email|email', 'Section(optional)'],
+    row_errors: rowErrors.slice(0, 20),
+  });
 });
 
 export default router;

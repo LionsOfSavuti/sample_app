@@ -122,3 +122,43 @@ cd sample_app/academic-scheduler
 docker compose up -d --build
 ./scripts/migrate-and-seed.sh
 ```
+
+## CSV upload formats
+
+### Students CSV
+Accepted headers (any one alias for each field):
+- Roll Number / student_id
+- Student Name / name
+- Email / email
+- section (optional)
+
+Example:
+```csv
+Roll Number,Student Name,Email
+PGP2301001,Alice Johnson,alice@iimr.ac.in
+PGP2301002,Bob Smith,bob@iimr.ac.in
+PGP2301003,Carol Davis,carol@iimr.ac.in
+```
+
+### Courses CSV
+Expected first 10 columns:
+1. Term
+2. Programme
+3. Area
+4. Course Name
+5. Course Code
+6. Section
+7. Credits
+8. Professor
+9. Max Seats
+10. Confirmed Seats
+
+Enrollment columns should follow after the first 10 columns (typically `1..75`) and may contain:
+- `Name(RollNumber)` (example: `Alice(PGP001)`)
+- `RollNumber` only (example: `EMBA001`)
+
+During upload:
+- Faculty is auto-created if missing.
+- Course and section are upserted.
+- Enrollment rows are created for conflict detection.
+- UI shows a success/failure message with inserted/skipped counts.
