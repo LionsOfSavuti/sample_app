@@ -29,6 +29,9 @@ export const api = {
   years: {
     list: () => request('/academic/years'),
     create: (payload: unknown) => request('/academic/years', { method: 'POST', body: JSON.stringify(payload) }),
+    setCurrent: (id: string) => request(`/academic/years/${id}/set-current`, { method: 'POST' }),
+    archive: (id: string) => request(`/academic/years/${id}/archive`, { method: 'POST' }),
+    restore: (id: string) => request(`/academic/years/${id}/restore`, { method: 'POST' }),
   },
   programs: {
     list: (academicYearId?: string) => request(`/academic/programs${academicYearId ? `?academic_year_id=${academicYearId}` : ''}`),
@@ -40,6 +43,7 @@ export const api = {
   },
   scheduling: {
     generate: (termId: string) => request(`/scheduling/generate/${termId}`, { method: 'POST' }),
+    weekly: (termId: string) => request(`/scheduling/weekly?term_id=${termId}`),
   },
   invitations: {
     list: () => request('/invitations'),

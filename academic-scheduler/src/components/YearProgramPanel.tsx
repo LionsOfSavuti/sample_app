@@ -33,7 +33,22 @@ export default function YearProgramPanel() {
           <input type="date" className="border p-2 w-full" value={yearForm.end_date} onChange={(e) => setYearForm({ ...yearForm, end_date: e.target.value })} />
           <button className="bg-blue-700 text-white px-3 py-1 rounded">Add Year</button>
         </form>
-        <ul className="text-sm space-y-1">{years.map((y) => <li key={y.id}>{y.name}</li>)}</ul>
+        <ul className="text-sm space-y-2">
+          {years.map((y) => (
+            <li key={y.id} className="border rounded p-2">
+              <div className="font-medium">{y.name} {y.is_current ? '(current)' : ''} {y.is_archived ? '(archived)' : ''}</div>
+              <div className="text-xs text-slate-600">Programs: {(y as any).program_count ?? 0}, Terms: {(y as any).term_count ?? 0}</div>
+              <div className="flex gap-2 mt-2">
+                {!y.is_current && <button className="text-blue-700" onClick={async () => { await api.years.setCurrent(y.id); await reloadYears(); }}>Set Current</button>}
+                {!y.is_archived ? (
+                  <button className="text-amber-700" onClick={async () => { await api.years.archive(y.id); await reloadYears(); }}>Archive</button>
+                ) : (
+                  <button className="text-green-700" onClick={async () => { await api.years.restore(y.id); await reloadYears(); }}>Restore</button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="bg-white p-4 rounded shadow">

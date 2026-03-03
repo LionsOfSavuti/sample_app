@@ -4,7 +4,13 @@ import pool from '../db/pool.js';
 const router = express.Router();
 
 router.get('/years', async (_req, res) => {
-  const result = await pool.query('SELECT * FROM academic_years ORDER BY created_at DESC');
+  const result = await pool.query(
+    `SELECT ay.*,
+      (SELECT COUNT(*)::int FROM programs p WHERE p.academic_year_id = ay.id) AS program_count,
+      (SELECT COUNT(*)::int FROM terms t WHERE t.academic_year_id = ay.id) AS term_count
+     FROM academic_years ay
+     ORDER BY ay.created_at DESC`
+  );
   res.json(result.rows);
 });
 
@@ -16,6 +22,25 @@ router.post('/years', async (req, res) => {
     [name, start_date, end_date, is_current]
   );
   res.status(201).json(r.rows[0]);
+});
+
+router.post('/years/:id/set-current', async (req, res) => {
+  await pool.query('UPDATE academic_years SET is_current = false');
+  const r = await pool.query('UPDATE academic_years SET is_current = true WHERE id = $1 RETURNING *', [req.params.id]);
+  if (!r.rows[0]) return res.status(404).json({ error: 'Year not found' });
+  res.json(r.rows[0]);
+});
+
+router.post('/years/:id/archive', async (req, res) => {
+  const r = await pool.query('UPDATE academic_years SET is_archived = true, is_current = false WHERE id = $1 RETURNING *', [req.params.id]);
+  if (!r.rows[0]) return res.status(404).json({ error: 'Year not found' });
+  res.json(r.rows[0]);
+});
+
+router.post('/years/:id/restore', async (req, res) => {
+  const r = await pool.query('UPDATE academic_years SET is_archived = false WHERE id = $1 RETURNING *', [req.params.id]);
+  if (!r.rows[0]) return res.status(404).json({ error: 'Year not found' });
+  res.json(r.rows[0]);
 });
 
 router.get('/programs', async (req, res) => {

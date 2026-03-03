@@ -5,6 +5,7 @@ import YearProgramPanel from './components/YearProgramPanel';
 import ChangePasswordPanel from './components/ChangePasswordPanel';
 import InvitationsPanel from './components/InvitationsPanel';
 import StatsPanel from './components/StatsPanel';
+import WeeklyGrid from './components/WeeklyGrid';
 import { AcademicYearProvider } from './contexts/AcademicYearContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProgramProvider } from './contexts/ProgramContext';
@@ -24,6 +25,7 @@ function Dashboard() {
             <StatsPanel />
             <YearProgramPanel />
             <TermAndGenerationPanel />
+            <WeeklyGrid />
             <InvitationsPanel />
             <ChangePasswordPanel />
           </div>

@@ -90,4 +90,27 @@ router.post('/generate/:termId', async (req, res) => {
   res.json({ generated: inserts.length });
 });
 
+
+router.get('/weekly', async (req, res) => {
+  const { term_id } = req.query;
+  if (!term_id) return res.status(400).json({ error: 'term_id is required' });
+
+  const q = await pool.query(
+    `SELECT ts.day_of_week, ts.start_time, ts.end_time, ts.slot_name,
+            c.code AS course_code, c.name AS course_name, cs.section_name,
+            f.name AS faculty_name, cr.name AS classroom_name
+     FROM schedules s
+     JOIN time_slots ts ON ts.id = s.time_slot_id
+     JOIN course_sections cs ON cs.id = s.course_section_id
+     JOIN courses c ON c.id = cs.course_id
+     LEFT JOIN faculty f ON f.id = cs.faculty_id
+     LEFT JOIN classrooms cr ON cr.id = s.classroom_id
+     WHERE s.term_id = $1
+     ORDER BY ts.start_time, ts.day_of_week`,
+    [term_id]
+  );
+
+  res.json(q.rows);
+});
+
 export default router;
