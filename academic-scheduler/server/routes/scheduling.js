@@ -91,6 +91,22 @@ router.post('/generate/:termId', async (req, res) => {
 });
 
 
+
+router.post('/assign', async (req, res) => {
+  const { term_id, course_section_id, time_slot_id, classroom_id = null, program_id, academic_year } = req.body;
+  if (!term_id || !course_section_id || !time_slot_id || !program_id || !academic_year) {
+    return res.status(400).json({ error: 'term_id, course_section_id, time_slot_id, program_id, academic_year required' });
+  }
+
+  const q = await pool.query(
+    `INSERT INTO schedules(course_section_id,time_slot_id,classroom_id,term_id,program_id,academic_year)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     RETURNING *`,
+    [course_section_id, time_slot_id, classroom_id, term_id, program_id, academic_year]
+  );
+  res.status(201).json(q.rows[0]);
+});
+
 router.get('/weekly', async (req, res) => {
   const { term_id } = req.query;
   if (!term_id) return res.status(400).json({ error: 'term_id is required' });

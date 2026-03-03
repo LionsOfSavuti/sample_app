@@ -1,11 +1,8 @@
 import Header from './components/Header';
 import LoginPage from './components/LoginPage';
-import TermAndGenerationPanel from './components/TermAndGenerationPanel';
-import YearProgramPanel from './components/YearProgramPanel';
-import ChangePasswordPanel from './components/ChangePasswordPanel';
-import InvitationsPanel from './components/InvitationsPanel';
 import StatsPanel from './components/StatsPanel';
 import WeeklyGrid from './components/WeeklyGrid';
+import SettingsPanel from './components/SettingsPanel';
 import { AcademicYearProvider } from './contexts/AcademicYearContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProgramProvider } from './contexts/ProgramContext';
@@ -21,14 +18,11 @@ function Dashboard() {
       <ProgramProvider>
         <div className="min-h-screen bg-slate-100">
           <Header />
-          <div className="max-w-6xl mx-auto p-4 space-y-4">
+          <div className="max-w-7xl mx-auto p-4 space-y-4">
             <StatsPanel />
-            <YearProgramPanel />
-            <TermAndGenerationPanel />
             <WeeklyGrid />
-            <InvitationsPanel />
-            <ChangePasswordPanel />
           </div>
+          <SettingsPanel />
         </div>
       </ProgramProvider>
     </AcademicYearProvider>

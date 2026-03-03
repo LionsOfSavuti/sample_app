@@ -44,6 +44,7 @@ export const api = {
   scheduling: {
     generate: (termId: string) => request(`/scheduling/generate/${termId}`, { method: 'POST' }),
     weekly: (termId: string) => request(`/scheduling/weekly?term_id=${termId}`),
+    assign: (payload: unknown) => request('/scheduling/assign', { method: 'POST', body: JSON.stringify(payload) }),
   },
   invitations: {
     list: () => request('/invitations'),
@@ -53,5 +54,19 @@ export const api = {
   },
   stats: {
     overview: (programId?: string) => request(`/stats/overview${programId ? `?program_id=${programId}` : ''}`),
+  },
+  imports: {
+    courses: (payload: unknown) => request('/academic/import/courses', { method: 'POST', body: JSON.stringify(payload) }),
+    students: (payload: unknown) => request('/academic/import/students', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  timeSlots: {
+    list: (programId: string, academicYear: string) => request(`/academic/time-slots?program_id=${programId}&academic_year=${encodeURIComponent(academicYear)}`),
+    create: (payload: unknown) => request('/academic/time-slots', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  courseSections: {
+    list: (programId: string, academicYear: string) => request(`/academic/course-sections?program_id=${programId}&academic_year=${encodeURIComponent(academicYear)}`),
+  },
+  classrooms: {
+    list: (programId: string, academicYear: string) => request(`/academic/classrooms?program_id=${programId}&academic_year=${encodeURIComponent(academicYear)}`),
   },
 };
