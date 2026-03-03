@@ -4,9 +4,18 @@ import pool from '../db/pool.js';
 const router = express.Router();
 
 const parseCsv = (text) => {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .replace(/^\uFEFF/, '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map((h) => h.trim());
+
+  const headers = lines[0]
+    .split(',')
+    .map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
+
   return lines.slice(1).map((line) => {
     const cols = line.split(',').map((c) => c.trim());
     return Object.fromEntries(headers.map((h, i) => [h, cols[i] ?? '']));
@@ -221,8 +230,11 @@ router.post('/classrooms', async (req, res) => {
 
 router.post('/import/courses', async (req, res) => {
   const { csv, program_id, academic_year } = req.body;
+  if (!program_id || !academic_year) return res.status(400).json({ error: 'program_id and academic_year are required' });
+
   const rows = parseCsv(csv || '');
   let inserted = 0;
+  let skipped = 0;
 
   for (const row of rows) {
     const code = row.code;
@@ -231,7 +243,10 @@ router.post('/import/courses', async (req, res) => {
     const term = Number(row.term || 1);
     const section = row.section || 'A';
 
-    if (!code || !name) continue;
+    if (!code || !name) {
+      skipped += 1;
+      continue;
+    }
 
     const c = await pool.query(
       `INSERT INTO courses(name,code,credits,term,program_id,academic_year)
@@ -251,16 +266,22 @@ router.post('/import/courses', async (req, res) => {
     inserted += 1;
   }
 
-  res.json({ inserted, total: rows.length });
+  res.json({ inserted, skipped, total: rows.length, expected_columns: ['code','name','credits','term','section'] });
 });
 
 router.post('/import/students', async (req, res) => {
   const { csv, program_id, academic_year } = req.body;
+  if (!program_id || !academic_year) return res.status(400).json({ error: 'program_id and academic_year are required' });
+
   const rows = parseCsv(csv || '');
   let inserted = 0;
+  let skipped = 0;
 
   for (const row of rows) {
-    if (!row.student_id || !row.name) continue;
+    if (!row.student_id || !row.name) {
+      skipped += 1;
+      continue;
+    }
     await pool.query(
       `INSERT INTO students(student_id,name,email,section,program_id,academic_year)
        VALUES ($1,$2,$3,$4,$5,$6)
@@ -271,7 +292,7 @@ router.post('/import/students', async (req, res) => {
     inserted += 1;
   }
 
-  res.json({ inserted, total: rows.length });
+  res.json({ inserted, skipped, total: rows.length, expected_columns: ['student_id','name','email','section'] });
 });
 
 export default router;

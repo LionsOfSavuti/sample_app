@@ -122,10 +122,17 @@ export default function FrontSchedulerPage() {
   };
 
   const upload = async (type: 'students' | 'courses', file?: File) => {
-    if (!file || !programId || !academicYearText) return;
+    if (!file || !programId || !academicYearText) {
+      alert('Select year/program first before uploading CSV.');
+      return;
+    }
+
     const text = await file.text();
-    if (type === 'students') await api.imports.students({ csv: text, program_id: programId, academic_year: academicYearText });
-    else await api.imports.courses({ csv: text, program_id: programId, academic_year: academicYearText });
+    const out = type === 'students'
+      ? await api.imports.students({ csv: text, program_id: programId, academic_year: academicYearText })
+      : await api.imports.courses({ csv: text, program_id: programId, academic_year: academicYearText });
+
+    alert(`${type} import complete: inserted ${out.inserted}/${out.total}, skipped ${out.skipped ?? 0}`);
     await refreshData();
   };
 
