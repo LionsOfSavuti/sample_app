@@ -5,14 +5,19 @@ import { FacultyPanel, CoursePanel, StudentPanel, NoClassPanel, ConflictReschedu
 
 type Year = { id: string; name: string };
 type Program = { id: string; name: string; code: string; academic_year_id: string };
-type Term = { id: string; name: string; term_number: number; academic_year_id: string; program_id: string };
+type Term = { id: string; name: string; term_number: number; academic_year_id: string; program_id: string; start_date?: string; end_date?: string };
 
 type CourseCard = { id: string; code: string; name: string; section_name: string; students: number };
 type Slot = { id: string; day_of_week: number; start_time: string; end_time: string; slot_name: string };
 type Room = { id: string; name: string };
 type Weekly = { day_of_week: number; start_time: string; end_time: string; course_code: string; section_name: string; classroom_name?: string; faculty_name?: string };
+type Faculty = { id: string; name: string; department?: string };
+type FacultyCalendarEvent = { class_date: string; course_code: string; section: string; class_number: number; time_slot: string; classroom_name?: string; status: string };
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const endOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
 
 export default function FrontSchedulerPage() {
   const [years, setYears] = useState<Year[]>([]);
@@ -36,6 +41,13 @@ export default function FrontSchedulerPage() {
   const [search, setSearch] = useState('');
   const [dragCardId, setDragCardId] = useState('');
   const [uploadMessage, setUploadMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [showFacultyCalendar, setShowFacultyCalendar] = useState(false);
+  const [facultyList, setFacultyList] = useState<Faculty[]>([]);
+  const [facultySearch, setFacultySearch] = useState('');
+  const [selectedFacultyId, setSelectedFacultyId] = useState('');
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [facultyCalendarEvents, setFacultyCalendarEvents] = useState<FacultyCalendarEvent[]>([]);
 
   const academicYearText = years.find((y) => y.id === yearId)?.name || '';
   const currentProgram = programs.find((p) => p.id === programId);
@@ -78,6 +90,14 @@ export default function FrontSchedulerPage() {
     }
   };
 
+  const loadFacultyCalendar = async (facultyId: string, month: Date) => {
+    if (!termId || !facultyId) return;
+    const startDate = startOfMonth(month).toISOString().slice(0, 10);
+    const endDate = endOfMonth(month).toISOString().slice(0, 10);
+    const events = await api.scheduling.facultyCalendar(termId, facultyId, startDate, endDate);
+    setFacultyCalendarEvents(events);
+  };
+
   useEffect(() => {
     loadMeta().catch(() => {});
   }, []);
@@ -96,6 +116,21 @@ export default function FrontSchedulerPage() {
   useEffect(() => {
     refreshData().catch(() => {});
   }, [programId, termId, academicYearText]);
+
+  useEffect(() => {
+    if (showFacultyCalendar && programId && academicYearText) {
+      api.faculty.list(programId, academicYearText).then((rows) => {
+        setFacultyList(rows);
+        if (!selectedFacultyId && rows[0]) setSelectedFacultyId(rows[0].id);
+      }).catch(() => {});
+    }
+  }, [showFacultyCalendar, programId, academicYearText]);
+
+  useEffect(() => {
+    if (showFacultyCalendar && selectedFacultyId) {
+      loadFacultyCalendar(selectedFacultyId, calendarMonth).catch(() => {});
+    }
+  }, [showFacultyCalendar, selectedFacultyId, termId, calendarMonth]);
 
   const addRoom = async () => {
     if (!roomName || !programId || !academicYearText) return;
@@ -164,7 +199,7 @@ export default function FrontSchedulerPage() {
     return weekly.filter((w) => w.day_of_week === day && w.start_time === start && w.end_time === end);
   };
 
-  const onDropCell = async (dayName: string, time: string) => {
+  const onDropRoomSlot = async (dayName: string, time: string, roomId: string) => {
     if (!dragCardId || !termId || !programId || !academicYearText) return;
     const slot = slotFor(dayName, time);
     if (!slot) return;
@@ -172,12 +207,40 @@ export default function FrontSchedulerPage() {
       term_id: termId,
       course_section_id: dragCardId,
       time_slot_id: slot.id,
-      classroom_id: rooms[0]?.id || null,
+      classroom_id: roomId,
       program_id: programId,
       academic_year: academicYearText,
     });
     setWeekly(await api.scheduling.weekly(termId));
   };
+
+  const filteredFaculty = facultyList.filter((f) => f.name.toLowerCase().includes(facultySearch.toLowerCase()));
+  const selectedFaculty = facultyList.find((f) => f.id === selectedFacultyId);
+
+  const calendarCells = useMemo(() => {
+    const first = startOfMonth(calendarMonth);
+    const last = endOfMonth(calendarMonth);
+    const offset = (first.getDay() + 6) % 7;
+    const daysInMonth = last.getDate();
+    const total = Math.ceil((offset + daysInMonth) / 7) * 7;
+
+    return Array.from({ length: total }, (_, idx) => {
+      const dayNum = idx - offset + 1;
+      if (dayNum < 1 || dayNum > daysInMonth) return null;
+      const d = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), dayNum);
+      return d.toISOString().slice(0, 10);
+    });
+  }, [calendarMonth]);
+
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, FacultyCalendarEvent[]>();
+    for (const e of facultyCalendarEvents) {
+      const arr = map.get(e.class_date) || [];
+      arr.push(e);
+      map.set(e.class_date, arr);
+    }
+    return map;
+  }, [facultyCalendarEvents]);
 
   return (
     <>
@@ -208,7 +271,7 @@ export default function FrontSchedulerPage() {
         <button className="btn btn-muted">🗓 Manage Terms</button>
         <button className="btn btn-success">⬇ Export Timetable</button>
         <button className="btn btn-green">📅 Calendar</button>
-        <button className="btn btn-indigo">👥 Faculty</button>
+        <button className="btn btn-indigo" onClick={() => setShowFacultyCalendar(true)}>👥 Faculty</button>
         <button className="btn btn-indigo">🕘 Rescheduling History</button>
         <button className="btn btn-muted">⚙ Settings</button>
         <label className="btn btn-teal">📚 Import Courses<input type="file" hidden onChange={(e) => upload('courses', e.target.files?.[0])} /></label>
@@ -252,12 +315,12 @@ export default function FrontSchedulerPage() {
                 {timeHeaders.map((h) => {
                   const items = cellItems(day, h);
                   return (
-                    <div key={`${day}-${h}`} className="cell slot-container upgraded" onDragOver={(e) => e.preventDefault()} onDrop={() => onDropCell(day, h)}>
+                    <div key={`${day}-${h}`} className="cell slot-container upgraded">
                       {rooms.map((r) => (
-                        <div key={r.id} className="room-slot upgraded">
+                        <div key={r.id} className="room-slot upgraded" onDragOver={(e) => e.preventDefault()} onDrop={() => onDropRoomSlot(day, h, r.id)}>
                           <span className="room-label">🏫 {r.name}</span>
                           {items.filter((i) => !i.classroom_name || i.classroom_name === r.name).length === 0 ? (
-                            <div className="empty-slot">Empty</div>
+                            <div className="empty-slot">Drop course here</div>
                           ) : (
                             items
                               .filter((i) => !i.classroom_name || i.classroom_name === r.name)
@@ -288,6 +351,63 @@ export default function FrontSchedulerPage() {
           </div>
         </main>
       </div>
+
+      {showFacultyCalendar && (
+        <div className="modal-backdrop">
+          <div className="modal-shell">
+            <div className="modal-header">
+              <h2>👤 Faculty Course Details</h2>
+              <button className="close-btn" onClick={() => setShowFacultyCalendar(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <aside className="faculty-list-pane">
+                <h3>Faculty List</h3>
+                <input className="form-input" placeholder="Search faculty..." value={facultySearch} onChange={(e) => setFacultySearch(e.target.value)} />
+                <div className="faculty-list-scroll">
+                  {filteredFaculty.map((f) => (
+                    <button key={f.id} className={`faculty-item ${selectedFacultyId === f.id ? 'active' : ''}`} onClick={() => setSelectedFacultyId(f.id)}>
+                      <strong>{f.name}</strong>
+                      <span>{f.department || 'Faculty'}</span>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+
+              <section className="faculty-calendar-pane">
+                <div className="calendar-toolbar">
+                  <button className="btn btn-outline" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>Previous</button>
+                  <div className="calendar-title">
+                    {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    <small>{selectedFaculty?.name || 'Select Faculty'} · {currentTerm?.name || 'No term selected'}</small>
+                  </div>
+                  <button className="btn btn-outline" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>Next</button>
+                </div>
+
+                <div className="month-grid">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <div key={d} className="month-head">{d}</div>)}
+                  {calendarCells.map((dateKey, idx) => {
+                    if (!dateKey) return <div key={idx} className="month-cell empty" />;
+                    const dayEvents = eventsByDate.get(dateKey) || [];
+                    return (
+                      <div key={dateKey} className="month-cell">
+                        <div className="day-num">{Number(dateKey.slice(-2))}</div>
+                        {dayEvents.slice(0, 3).map((ev, i) => (
+                          <div key={`${dateKey}-${i}`} className={`calendar-event ${ev.status}`}>
+                            <strong>{ev.course_code}-{ev.section}</strong>
+                            <span>#{ev.class_number} · {ev.time_slot}</span>
+                            <span>{ev.classroom_name || '-'}</span>
+                          </div>
+                        ))}
+                        {dayEvents.length > 3 && <div className="more-events">+{dayEvents.length - 3} more</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto p-4">
         <FacultyPanel />

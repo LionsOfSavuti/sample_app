@@ -153,6 +153,30 @@ router.delete('/clear/:termId', async (req, res) => {
   res.json({ success: true });
 });
 
+
+router.get('/faculty-calendar', async (req, res) => {
+  const { term_id, faculty_id, start_date, end_date } = req.query;
+  if (!term_id || !faculty_id) return res.status(400).json({ error: 'term_id and faculty_id are required' });
+
+  const q = await pool.query(
+    `SELECT sc.class_date, c.code AS course_code, sc.section, sc.class_number, sc.time_slot, sc.status,
+            cr.name AS classroom_name
+     FROM scheduled_classes sc
+     JOIN courses c ON c.id = sc.course_id
+     JOIN schedules s ON s.id = sc.schedule_id
+     JOIN course_sections cs ON cs.id = s.course_section_id
+     LEFT JOIN classrooms cr ON cr.id = s.classroom_id
+     WHERE sc.term_id = $1
+       AND cs.faculty_id = $2
+       AND ($3::date IS NULL OR sc.class_date >= $3::date)
+       AND ($4::date IS NULL OR sc.class_date <= $4::date)
+     ORDER BY sc.class_date, sc.class_number`,
+    [term_id, faculty_id, start_date || null, end_date || null]
+  );
+
+  res.json(q.rows);
+});
+
 router.get('/weekly', async (req, res) => {
   const { term_id } = req.query;
   if (!term_id) return res.status(400).json({ error: 'term_id is required' });

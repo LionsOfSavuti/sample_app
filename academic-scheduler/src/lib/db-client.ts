@@ -48,6 +48,7 @@ export const api = {
     conflicts: (termId: string) => request(`/scheduling/conflicts/${termId}`),
     history: (termId: string) => request(`/scheduling/reschedule-history/${termId}`),
     reschedule: (payload: unknown) => request('/scheduling/reschedule', { method: 'POST', body: JSON.stringify(payload) }),
+    facultyCalendar: (termId: string, facultyId: string, startDate: string, endDate: string) => request(`/scheduling/faculty-calendar?term_id=${termId}&faculty_id=${facultyId}&start_date=${startDate}&end_date=${endDate}`),
   },
   invitations: {
     list: () => request('/invitations'),
