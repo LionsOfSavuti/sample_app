@@ -87,6 +87,78 @@ router.post('/terms', async (req, res) => {
   res.status(201).json(r.rows[0]);
 });
 
+router.get('/no-class-periods', async (req, res) => {
+  const { term_id } = req.query;
+  const q = await pool.query('SELECT * FROM no_class_periods WHERE term_id = $1 ORDER BY start_date', [term_id]);
+  res.json(q.rows);
+});
+
+router.post('/no-class-periods', async (req, res) => {
+  const { term_id, program_id, activity_name, start_date, end_date } = req.body;
+  const q = await pool.query(
+    `INSERT INTO no_class_periods(term_id,program_id,activity_name,start_date,end_date)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [term_id, program_id, activity_name, start_date, end_date]
+  );
+  res.status(201).json(q.rows[0]);
+});
+
+router.get('/faculty', async (req, res) => {
+  const { program_id, academic_year } = req.query;
+  const q = await pool.query('SELECT * FROM faculty WHERE program_id = $1 AND academic_year = $2 ORDER BY name', [program_id, academic_year]);
+  res.json(q.rows);
+});
+
+router.post('/faculty', async (req, res) => {
+  const { name, email, department, program_id, academic_year } = req.body;
+  const q = await pool.query(
+    `INSERT INTO faculty(name,email,department,program_id,academic_year)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [name, email, department, program_id, academic_year]
+  );
+  res.status(201).json(q.rows[0]);
+});
+
+router.get('/courses', async (req, res) => {
+  const { program_id, academic_year, term } = req.query;
+  const q = term
+    ? await pool.query('SELECT * FROM courses WHERE program_id = $1 AND academic_year = $2 AND term = $3 ORDER BY code', [program_id, academic_year, term])
+    : await pool.query('SELECT * FROM courses WHERE program_id = $1 AND academic_year = $2 ORDER BY code', [program_id, academic_year]);
+  res.json(q.rows);
+});
+
+router.post('/courses', async (req, res) => {
+  const { name, code, credits, term, program_id, academic_year } = req.body;
+  const q = await pool.query(
+    `INSERT INTO courses(name,code,credits,term,program_id,academic_year)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (code,term,program_id,academic_year)
+     DO UPDATE SET name = EXCLUDED.name, credits = EXCLUDED.credits
+     RETURNING *`,
+    [name, code, credits, term, program_id, academic_year]
+  );
+  res.status(201).json(q.rows[0]);
+});
+
+router.get('/students', async (req, res) => {
+  const { program_id, academic_year } = req.query;
+  const q = await pool.query('SELECT * FROM students WHERE program_id = $1 AND academic_year = $2 ORDER BY name', [program_id, academic_year]);
+  res.json(q.rows);
+});
+
+router.post('/students', async (req, res) => {
+  const { student_id, name, email, section, program_id, academic_year } = req.body;
+  const q = await pool.query(
+    `INSERT INTO students(student_id,name,email,section,program_id,academic_year)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (student_id)
+     DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, section = EXCLUDED.section
+     RETURNING *`,
+    [student_id, name, email, section, program_id, academic_year]
+  );
+  res.status(201).json(q.rows[0]);
+});
+
 router.get('/time-slots', async (req, res) => {
   const { program_id, academic_year } = req.query;
   const q = await pool.query(

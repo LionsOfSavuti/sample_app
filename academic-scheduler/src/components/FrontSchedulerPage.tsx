@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/db-client';
 import './scheduler.css';
+import { FacultyPanel, CoursePanel, StudentPanel, NoClassPanel, ConflictReschedulePanel } from './FeaturePanels';
 
 type Year = { id: string; name: string };
 type Program = { id: string; name: string; code: string; academic_year_id: string };
@@ -242,6 +243,14 @@ export default function FrontSchedulerPage() {
             ))}
           </div>
         </main>
+      </div>
+
+      <div className="max-w-7xl mx-auto p-4">
+        <FacultyPanel />
+        <CoursePanel />
+        <StudentPanel />
+        <NoClassPanel />
+        <ConflictReschedulePanel />
       </div>
     </>
   );

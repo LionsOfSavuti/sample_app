@@ -45,6 +45,9 @@ export const api = {
     generate: (termId: string) => request(`/scheduling/generate/${termId}`, { method: 'POST' }),
     weekly: (termId: string) => request(`/scheduling/weekly?term_id=${termId}`),
     assign: (payload: unknown) => request('/scheduling/assign', { method: 'POST', body: JSON.stringify(payload) }),
+    conflicts: (termId: string) => request(`/scheduling/conflicts/${termId}`),
+    history: (termId: string) => request(`/scheduling/reschedule-history/${termId}`),
+    reschedule: (payload: unknown) => request('/scheduling/reschedule', { method: 'POST', body: JSON.stringify(payload) }),
   },
   invitations: {
     list: () => request('/invitations'),
@@ -68,5 +71,23 @@ export const api = {
   },
   classrooms: {
     list: (programId: string, academicYear: string) => request(`/academic/classrooms?program_id=${programId}&academic_year=${encodeURIComponent(academicYear)}`),
+    create: (payload: unknown) => request('/academic/classrooms', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+
+  faculty: {
+    list: (programId: string, academicYear: string) => request(`/academic/faculty?program_id=${programId}&academic_year=${encodeURIComponent(academicYear)}`),
+    create: (payload: unknown) => request('/academic/faculty', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  courses: {
+    list: (programId: string, academicYear: string) => request(`/academic/courses?program_id=${programId}&academic_year=${encodeURIComponent(academicYear)}`),
+    create: (payload: unknown) => request('/academic/courses', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  students: {
+    list: (programId: string, academicYear: string) => request(`/academic/students?program_id=${programId}&academic_year=${encodeURIComponent(academicYear)}`),
+    create: (payload: unknown) => request('/academic/students', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  noClass: {
+    list: (termId: string) => request(`/academic/no-class-periods?term_id=${termId}`),
+    create: (payload: unknown) => request('/academic/no-class-periods', { method: 'POST', body: JSON.stringify(payload) }),
   },
 };
