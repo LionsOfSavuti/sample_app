@@ -24,6 +24,8 @@ export const api = {
   login: (username: string, password: string) =>
     request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   me: () => request('/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
   years: {
     list: () => request('/academic/years'),
     create: (payload: unknown) => request('/academic/years', { method: 'POST', body: JSON.stringify(payload) }),
@@ -38,5 +40,14 @@ export const api = {
   },
   scheduling: {
     generate: (termId: string) => request(`/scheduling/generate/${termId}`, { method: 'POST' }),
+  },
+  invitations: {
+    list: () => request('/invitations'),
+    create: (payload: unknown) => request('/invitations', { method: 'POST', body: JSON.stringify(payload) }),
+    resend: (id: string) => request(`/invitations/${id}/resend`, { method: 'POST' }),
+    accept: (payload: unknown) => request('/invitations/accept', { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  stats: {
+    overview: (programId?: string) => request(`/stats/overview${programId ? `?program_id=${programId}` : ''}`),
   },
 };

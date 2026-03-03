@@ -5,7 +5,9 @@ import pool from './db/pool.js';
 import authRoutes from './routes/auth.js';
 import academicRoutes from './routes/academic.js';
 import schedulingRoutes from './routes/scheduling.js';
-import { requireAuth } from './middleware/auth.js';
+import invitationRoutes from './routes/invitations.js';
+import statsRoutes from './routes/stats.js';
+import { requireAuth, requireRole } from './middleware/auth.js';
 
 dotenv.config();
 
@@ -20,8 +22,10 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/academic', requireAuth, academicRoutes);
 app.use('/api/scheduling', requireAuth, schedulingRoutes);
+app.use('/api/invitations', requireAuth, invitationRoutes);
+app.use('/api/stats', requireAuth, statsRoutes);
 
-app.post('/api/query', requireAuth, async (req, res) => {
+app.post('/api/query', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
   const { text, params } = req.body;
   if (!text) return res.status(400).json({ error: 'text is required' });
 

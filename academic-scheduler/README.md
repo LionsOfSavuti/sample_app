@@ -105,6 +105,11 @@ If `docker info` still fails, restart Docker Desktop and reboot Windows.
 
 
 ## Included application features (implemented)
+
+- Role-based access guard (`admin`, `staff`, `faculty`) with protected API routes.
+- Password change flow with current-password validation and confirm-password UI.
+- Admin invitation management (create/list/resend/accept) with expiring tokens.
+- Dashboard overview statistics (faculty/courses/students/scheduled classes).
 - JWT login using seeded admin user.
 - Academic year creation/listing.
 - Program creation/listing (by academic year).
